@@ -643,3 +643,185 @@ void gestionStock::on_modif_clicked()
     else
     QMessageBox::critical(this,"erreur","erreur de modification");
 }
+void gestionStock::on_deconnecter_clicked()
+{
+    MainWindow *m = new MainWindow();
+                m->show();
+                this->close();
+}
+
+void gestionStock::on_menu_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(0);
+}
+
+void gestionStock::on_tableMecanicien_activated(const QModelIndex &index)
+{
+    QString val=ui->tableMecanicien->model()->data(index).toString();
+    mecanicien m=tabMecanicien.getMecanicien(val);
+    ui->lineEdit_cin->setText(m.get_cin());
+    ui->lineEdit_nom->setText(m.get_nom());
+    ui->lineEdit_prenom->setText(m.get_prenom());
+    ui->lineEdit_tel->setText(m.get_tel());
+    ui->lineEdit_ville->setText(m.get_ville());
+    ui->lineEdit_adresse->setText(m.get_adresse());
+    if(m.get_gendre()=="male")
+        ui->male->setChecked(true);
+    else ui->female->setChecked(true);
+    ui->lineEdit_cin->setReadOnly(true);
+
+}
+
+void gestionStock::on_participer_clicked()
+{
+    QItemSelectionModel *select = ui->tabEve->selectionModel();
+    QModelIndexList list;
+    if(select->hasSelection())
+    list=select->selectedRows();
+    for(int i=0; i< list.count(); i++)
+    {
+       participation p(list[i].data().toInt(),this->id);
+       p.ajouter();
+    }
+    ui->tabEve->setModel(tmpevent.affichage("Gestion Stock"));
+}
+
+void gestionStock::on_gestionPromotion_clicked()
+{
+    ui->stackedWidget->setCurrentIndex(5);
+    ui->tableV->setModel(tmppro.afficherV(rechv));
+    ui->tableV_2->setModel(tmppro.afficher(rechP));
+    ui->modif->setDisabled(true);
+    ui->ajouterP->setEnabled(true);
+    ui->dateD->setDate(QDate::currentDate());
+    ui->dateF->setDate(QDate::currentDate());
+    ui->rechV->setPlaceholderText("chercher par Matricule ou marque du voiture");
+    ui->rechV_3->setPlaceholderText("chercher par Matricule ou marque du voiture");
+}
+
+void gestionStock::on_ajouterP_clicked()
+{
+    bool test=true;
+    QString msg="";
+    QString dateD=ui->dateD->date().toString("dd/MM/yyyy");
+    QString dateF=ui->dateF->date().toString("dd/MM/yyyy");
+    QString v=ui->valeur->text();
+    QModelIndex index = ui->tableV->currentIndex();
+    int id = index.data(Qt::DisplayRole).toInt();
+    QString marque=tmppro.getV(id);
+    if(ui->dateD->date()<QDate::currentDate())
+    {test=false;
+     ui->dateD->setDate(QDate::currentDate());
+    if(msg=="")
+    msg="date debut superieur a la date actuelle";
+    }
+    if(ui->dateF->date()<ui->dateD->date())
+    {
+        test=false;
+             ui->dateF->setDate(ui->dateD->date());
+            if(msg=="")
+            msg="date debut superieur a la date fin";
+    }
+    if((v.toInt()>80)||(v.toInt()<5)||(v.length()==0))
+    {
+        test=false;
+        ui->valeur->setText("");
+        if(msg=="")
+        msg="valeur du promotion doit etre entre 5 et 80";
+    }
+    if(test==false)
+    {
+       QMessageBox::critical(this,"warning",msg);
+    }
+    else
+     {promotion p(dateD,dateF,v,id);
+        if(p.ajouter())
+        {QMessageBox::information(this,"information","promotion ajouté");
+         QSqlQuery q=tmpcl.getMails();
+         q.exec();
+         while(q.next())
+         {
+             SmtpClient smtp("smtp.gmail.com", 465, SmtpClient::SslConnection);
+
+                        smtp.setUser("rentcar908@gmail.com");
+                        smtp.setPassword("rentcar123");
+
+
+                        MimeMessage message;
+
+                        message.setSender(new EmailAddress("rentcar908@gmail.com", "Rent Car"));
+
+                        message.addRecipient(new EmailAddress(q.value(0).toString(),"Rent Car"));
+                        message.setSubject("Nouvelle Promotion");
+                        MimeText text;
+                        text.setText("une nouvelle promotion de "+v+"% est disponible a Rent Car de "+dateD+" jusqu'a "+dateF+" pour une voiture de marque "+marque);
+                        message.addPart(&text);
+                        smtp.connectToHost();
+                        smtp.login();
+                        smtp.sendMail(message);
+                        smtp.quit();
+         }
+        }
+        ui->tableV_2->setModel(tmppro.afficher(rechP));
+    }
+}
+
+void gestionStock::on_rechV_textEdited(const QString &arg1)
+{
+    rechv=arg1;
+    ui->tableV->setModel(tmppro.afficherV(rechv));
+}
+
+void gestionStock::on_rechV_3_textEdited(const QString &arg1)
+{
+    rechP=arg1;
+    ui->tableV_2->setModel(tmppro.afficher(rechP));
+}
+
+void gestionStock::on_suppP_clicked()
+{
+    QItemSelectionModel *select = ui->tableV_2->selectionModel();
+    QModelIndexList list;
+    if(select->hasSelection())
+    list=select->selectedRows();
+    for(int i=0; i< list.count(); i++)
+    {
+       tmppro.supprimer(list[i].data().toInt());
+    }
+    ui->tableV_2->setModel(tmppro.afficher(rechP));
+}
+
+void gestionStock::on_retour_clicked()
+{
+ ui->stackedWidget->setCurrentIndex(0);
+}
+
+void gestionStock::on_tableV_2_doubleClicked(const QModelIndex &index)
+{
+    ui->modif->setEnabled(true);
+    ui->ajouterP->setDisabled(true);
+    id2=ui->tableV_2->model()->data(index).toInt();
+    promotion p=tmppro.remplir(id2);
+    ui->dateD->setDate(QDate::fromString(p.get_date_debut(),"dd/MM/yyyy"));
+    ui->dateF->setDate(QDate::fromString(p.get_date_fin(),"dd/MM/yyyy"));
+    ui->valeur->setText(p.get_valeur());
+}
+
+void gestionStock::on_modif_clicked()
+{QModelIndex index = ui->tableV->currentIndex();
+    int idv = index.data(Qt::DisplayRole).toInt();
+    promotion p(ui->dateD->date().toString("dd/MM/yyyy"),ui->dateF->date().toString("dd/MM/yyyy"),ui->valeur->text(),idv);
+    if(tmppro.modifier(p,id2))
+    {
+       ui->dateD->setDate(QDate::currentDate());
+       ui->dateF->setDate(QDate::currentDate());
+       ui->valeur->clear();
+       ui->ajouterP->setEnabled(true);
+       ui->modif->setDisabled(true);
+       ui->tableV_2->setModel(tmppro.afficher(rechP));
+       QMessageBox::information(this,"information","promotion modifié");
+       ui->tableV_2->setModel(tmppro.afficher(rechP));
+    }
+    else
+    QMessageBox::critical(this,"erreur","erreur de modification");
+}
